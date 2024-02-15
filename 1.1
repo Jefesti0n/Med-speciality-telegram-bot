@@ -1,65 +1,65 @@
 import telebot
+from numpy import array_split
 from telebot import types
-from symptoms import sore_throat, specialists_dict
 
+specialists_dict = dict.fromkeys(
+    ['Гинеколога', 'Аллерголога', 'Гастроэнтеролога', 'Дерматолога', 'Кардиолога', 'Невролога',
+     'Офтальмолога', 'Травматолога', 'Отоларинголога', 'Проктолога', 'Стоматолога', 'Терапевта', 'Уролога',
+     'Хирурга', 'Эндокринолога'], 0)
 bot = telebot.TeleBot('6953770870:AAGRSQccl2ATuRs8qyhmopUD7n6zY8-Pe7g')
 result = []
 
 
-def scoring():  # ф-я для начисления очков за ф-ии - симптомы
+def scoring():
     for specialist, score in sorted(specialists_dict.items(), key=lambda x: x[1], reverse=True):
         result.append(specialist)
     return result
 
 
-def standart_InlineKeyboard_Markup(message, symptoms_dict):
+primary_survey = {'Боль': 'pain', 'Изменение цвета выделений из половых органов'
+: 'female_discharge_alteration', 'Насморк': 'rheum', 'Контактная сыпь': 'contact rush'
+                  }
+
+pain_survey = {'Боль в животе': 'abdominal_pain', 'Боль в груди': 'chest_pain', 'Головная боль': 'headache',
+               'Боль в конечностях': 'limb_pain'}
+
+abdominal_pain_survey = {'Слева под ребром': 'left_hypochondrium', 'Справа под ребром': 'right_hypochondrium',
+                         'В верху живота': 'upper_abdominal', 'Посередине живота': 'periumbilical',
+                         'Слева в боку': 'left_flank', 'Справа в боку': 'right_flank',
+                         'Боль в низу живота': 'lower_abdominal_pain'}
+
+chosen_symptoms = []
+
+
+def standart_InlineKeyboard_Markup(symptoms_dict):
+    global markup
     markup = types.InlineKeyboardMarkup()
-    counter_elem = 0
     row_elem = []
     for k, v in symptoms_dict.items():
-        k = types.InlineKeyboardButton(str(v), callback_data=str(v))
-        counter_elem += 1
+        k = types.InlineKeyboardButton(str(k), callback_data=str(v))
+
         row_elem.append(k)
-        if counter_elem % 2 == 0:
-            markup.row(*row_elem)
-            row_elem.clear()
-    bot.send_message(message.chat.id, 'Уточните симптоматику', reply_markup=markup)
+        split_row_elem = array_split(row_elem, len(row_elem) // 2 + (len(row_elem) % 2 != 0))
+    for sublist in split_row_elem:
+        markup.add(*sublist)
 
 
 @bot.message_handler(commands=['start'])
 def start_survey(message):
-    standart_InlineKeyboard_Markup(message=message, symptoms_dict=primary_survey)
+    standart_InlineKeyboard_Markup(primary_survey)
+    bot.send_message(message.chat.id, 'Уточните симптоматику', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'pain')
 def pain(call):
-    message = call.message
-    markup = types.InlineKeyboardMarkup()
-    s_abdominal_pain = types.InlineKeyboardButton('Боль в животе', callback_data='abdominal_pain')
-    s_chest_pain = types.InlineKeyboardButton('Боль в груди', callback_data='chest_pain')
-    markup.row(s_abdominal_pain, s_chest_pain)
-    s_headache = types.InlineKeyboardButton('Головная боль', callback_data='headache')
-    s_limb_pain = types.InlineKeyboardButton('Боль в конечностях', callback_data='limb_pain')
-    markup.row(s_limb_pain, s_headache)
-    bot.send_message(message.chat.id, 'Уточните симптоматику', reply_markup=markup)
+    standart_InlineKeyboard_Markup(pain_survey)
+    bot.send_message(call.from_user.id, 'Уточните симптоматику', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'abdominal_pain')
 def abdominal_pain(call):
-    message = call.message
-    markup = types.InlineKeyboardMarkup()
-    s_left_hypochondrium = types.InlineKeyboardButton('Слева под ребром', callback_data='left_hypochondrium')
-    s_right_hypochondrium = types.InlineKeyboardButton('Справа под ребром', callback_data='right_hypochondrium')
-    markup.row(s_left_hypochondrium, s_right_hypochondrium)
-    s_upper_abdominal = types.InlineKeyboardButton('В верху живота', callback_data='upper_abdominal')
-    s_periumbilical = types.InlineKeyboardButton('Посередине живота', callback_data='periumbilical')
-    markup.row(s_upper_abdominal, s_periumbilical)
-    s_left_flank = types.InlineKeyboardButton('Слева в боку', callback_data='left_flank')
-    s_right_flank = types.InlineKeyboardButton('Справа в боку', callback_data='right_flank')
-    markup.row(s_left_flank, s_right_flank)
-    s_low_abdominal_pain = types.InlineKeyboardButton('В низу живота', callback_data='low_abdominal_pain')
-    markup.row(s_low_abdominal_pain)
-    bot.send_message(message.chat.id, 'Уточните локализацию', reply_markup=markup)
+    standart_InlineKeyboard_Markup(abdominal_pain_survey)
+    bot.send_message(call.from_user.id, 'Уточните локализацию', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'left_hypochondrium' or call.data == 'right_hypochondrium')
@@ -74,10 +74,15 @@ def hypochondrium_pain(call):
 
     bot.send_message(call.message.chat.id, 'У вас есть другие жалобы?', reply_markup=markup)
 
+
 @bot.callback_query_handler(func=lambda call: call.data == 'no')
 def do_final_score(call):
     bot.send_message(call.message.chat.id, f'Вам стоит посетить {result[0]}, также, возможно, {result[1]}')
+
+
 @bot.callback_query_handler(func=lambda call: call.data == 'yes')
 def do_final_score(call):
     bot.send_message(call.message.chat.id, f'Вам стоит посетить {result[0]}, также, возможно, {result[1]}')
+
+
 bot.polling(none_stop=True)
